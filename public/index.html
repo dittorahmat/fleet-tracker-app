@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FleetTracker - Real-time Vehicle Fleet Monitoring</title>
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --accent-color: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Layout Structure */
+    #sidebar {
+      width: 400px;
+      height: 100%;
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      box-shadow: 10px 0 30px rgba(0, 0, 0, 0.3);
+    }
+
+    #map-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Header */
+    .sidebar-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sidebar-header i {
+      color: var(--accent-color);
+      animation: pulse 2s infinite;
+    }
+
+    .sidebar-header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .sidebar-header span {
+      color: var(--accent-color);
+    }
+
+    /* Tabs Navigation */
+    .tabs-nav {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 14px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tab-btn.active {
+      color: var(--accent-color);
+      border-bottom: 2px solid var(--accent-color);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    /* Content Panels */
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    /* Vehicle List Components */
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .vehicle-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .vehicle-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 4px;
+      background: transparent;
+      transition: all 0.3s ease;
+    }
+
+    .vehicle-card:hover {
+      background: rgba(255, 255, 255, 0.06);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .vehicle-card.selected::before {
+      background: var(--accent-color);
+    }
+
+    .vehicle-card.selected {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.04);
+    }
+
+    .vehicle-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .vehicle-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 99px;
+      font-weight: 500;
+    }
+
+    .status-active {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+    }
+
+    .vehicle-details {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .detail-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .detail-item i {
+      font-size: 14px;
+      width: 16px;
+    }
+
+    /* History Filter Panel */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .form-select, .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .form-select:focus, .form-input:focus {
+      border-color: var(--accent-color);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent-color);
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: none;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state i {
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+
+    /* Map Custom Popup Styling */
+    .leaflet-popup-content-wrapper {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 4px;
+    }
+    .leaflet-popup-tip {
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+    }
+    .popup-content h3 {
+      font-size: 16px;
+      margin-bottom: 6px;
+      color: var(--accent-color);
+    }
+    .popup-content p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Control Panel -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <i data-lucide="navigation"></i>
+      <h1>Fleet<span>Tracker</span></h1>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab('live')">
+        <i data-lucide="activity"></i> Live Tracking
+      </button>
+      <button class="tab-btn" onclick="switchTab('history')">
+        <i data-lucide="history"></i> History Path
+      </button>
+    </div>
+
+    <div class="panel-content">
+      <!-- Live Tracking Panel -->
+      <div id="live-panel" class="panel active">
+        <h2 class="section-title">Active Vehicles</h2>
+        <div id="vehicle-list">
+          <div class="empty-state">
+            <i data-lucide="loader-2" class="animate-spin"></i>
+            <p>Fetching active vehicles...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Panel -->
+      <div id="history-panel" class="panel">
+        <h2 class="section-title">Query Fleet History</h2>
+        
+        <div class="form-group">
+          <label for="history-vehicle">Select Vehicle</label>
+          <select id="history-vehicle" class="form-select">
+            <option value="">-- Choose Vehicle --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="history-start">Start Time</label>
+          <input type="datetime-local" id="history-start" class="form-input">
+        </div>
+
+        <div class="form-group">
+          <label for="history-end">End Time</label>
+          <input type="datetime-local" id="history-end" class="form-input">
+        </div>
+
+        <button class="btn" onclick="queryHistory()">
+          <i data-lucide="map-pin"></i> Draw Route Path
+        </button>
+
+        <button class="btn btn-secondary" onclick="clearHistoryPath()" style="margin-top: 10px;">
+          <i data-lucide="trash-2"></i> Clear Map
+        </button>
+
+        <div id="history-summary" style="margin-top: 20px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map Display -->
+  <div id="map-container">
+    <div id="map"></div>
+  </div>
+
+  <!-- Leaflet Javascript -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <script>
+    // Initialize map
+    const map = L.map('map', {
+      zoomControl: false
+    }).setView([-6.200000, 106.816666], 12); // Jakarta Coordinates by default
+
+    // Dark Map Style (OpenStreetMap Carto DB Dark Matter)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(map);
+
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    // Active Markers and History Layers
+    let vehicleMarkers = {};
+    let historyPolyline = null;
+    let historyStartMarker = null;
+    let historyEndMarker = null;
+    let autoRefreshInterval = null;
+
+    // Switch between side panels
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+
+      if (tab === 'live') {
+        document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+        document.getElementById('live-panel').classList.add('active');
+        startAutoRefresh();
+      } else {
+        document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+        document.getElementById('history-panel').classList.add('active');
+        stopAutoRefresh();
+        populateHistoryVehicles();
+      }
+    }
+
+    // Refresh Vehicle Locations
+    async function fetchVehicles() {
+      try {
+        const response = await fetch('/api/vehicles');
+        const vehicles = await response.json();
+        
+        const listContainer = document.getElementById('vehicle-list');
+        if (vehicles.length === 0) {
+          listContainer.innerHTML = `
+            <div class="empty-state">
+              <i data-lucide="alert-circle" style="width: 32px; height: 32px;"></i>
+              <p>No active vehicles found. Please run the device simulator.</p>
+            </div>
+          `;
+          lucide.createIcons();
+          return;
+        }
+
+        let html = '';
+        vehicles.forEach(vehicle => {
+          const lastLoc = vehicle.lastLocation;
+          const lat = lastLoc ? parseFloat(lastLoc.latitude).toFixed(6) : 'N/A';
+          const lng = lastLoc ? parseFloat(lastLoc.longitude).toFixed(6) : 'N/A';
+          const speed = lastLoc ? parseFloat(lastLoc.speed).toFixed(1) : 0;
+          const time = lastLoc ? new Date(lastLoc.timestamp).toLocaleString() : 'N/A';
+
+          html += `
+            <div class="vehicle-card" onclick="focusVehicle('${vehicle.id}', ${lat}, ${lng})">
+              <div class="vehicle-info">
+                <span class="vehicle-name">${vehicle.name}</span>
+                <span class="status-badge status-active">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--success);"></span>
+                  ${vehicle.status}
+                </span>
+              </div>
+              <div class="vehicle-details">
+                <div class="detail-item"><i data-lucide="hash"></i> ID: ${vehicle.id}</div>
+                <div class="detail-item"><i data-lucide="map-pin"></i> Coordinates: ${lat}, ${lng}</div>
+                <div class="detail-item"><i data-lucide="gauge"></i> Speed: ${speed} km/h</div>
+                <div class="detail-item"><i data-lucide="clock"></i> Last Update: ${time}</div>
+              </div>
+            </div>
+          `;
+
+          // Draw marker on Map
+          if (lastLoc) {
+            updateMarker(vehicle, lastLoc);
+          }
+        });
+
+        listContainer.innerHTML = html;
+        lucide.createIcons();
+      } catch (err) {
+        console.error("Error fetching vehicles:", err);
+      }
+    }
+
+    function updateMarker(vehicle, loc) {
+      const lat = parseFloat(loc.latitude);
+      const lng = parseFloat(loc.longitude);
+      const heading = parseFloat(loc.heading);
+
+      const popupContent = `
+        <div class="popup-content">
+          <h3>${vehicle.name}</h3>
+          <p><b>ID:</b> ${vehicle.id}</p>
+          <p><b>Speed:</b> ${parseFloat(loc.speed).toFixed(1)} km/h</p>
+          <p><b>Heading:</b> ${heading}°</p>
+          <p><b>Last Seen:</b> ${new Date(loc.timestamp).toLocaleString()}</p>
+        </div>
+      `;
+
+      if (vehicleMarkers[vehicle.id]) {
+        vehicleMarkers[vehicle.id].setLatLng([lat, lng]);
+        vehicleMarkers[vehicle.id].getPopup().setContent(popupContent);
+      } else {
+        // Create custom circle marker representing vehicle
+        const marker = L.circleMarker([lat, lng], {
+          radius: 10,
+          fillColor: '#38bdf8',
+          color: '#fff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(map);
+
+        marker.bindPopup(popupContent);
+        vehicleMarkers[vehicle.id] = marker;
+      }
+    }
+
+    function focusVehicle(id, lat, lng) {
+      if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+        map.setView([lat, lng], 16);
+        if (vehicleMarkers[id]) {
+          vehicleMarkers[id].openPopup();
+        }
+      }
+    }
+
+    // Populate dropdown with vehicles for history tab
+    async function populateHistoryVehicles() {
+      try {
+        const response = await fetch('/api/vehicles');
+        const vehicles = await response.json();
+        const select = document.getElementById('history-vehicle');
+        
+        // Save current selection
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">-- Choose Vehicle --</option>';
+
+        vehicles.forEach(vehicle => {
+          const opt = document.createElement('option');
+          opt.value = vehicle.id;
+          opt.textContent = `${vehicle.name} (${vehicle.id})`;
+          select.appendChild(opt);
+        });
+
+        select.value = currentVal;
+      } catch (err) {
+        console.error("Error populating select list:", err);
+      }
+    }
+
+    // Retrieve and draw historical route path
+    async function queryHistory() {
+      const vehicleId = document.getElementById('history-vehicle').value;
+      const start = document.getElementById('history-start').value;
+      const end = document.getElementById('history-end').value;
+
+      if (!vehicleId) {
+        alert("Please select a vehicle first.");
+        return;
+      }
+
+      let url = `/api/vehicles/${vehicleId}/history`;
+      const params = [];
+      if (start) params.push(`start=${new Date(start).toISOString()}`);
+      if (end) params.push(`end=${new Date(end).toISOString()}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      try {
+        const response = await fetch(url);
+        const logs = await response.json();
+        
+        clearHistoryPath();
+
+        const summary = document.getElementById('history-summary');
+        if (logs.length === 0) {
+          summary.innerHTML = '<p style="color: var(--text-muted)">No historical logs found for the selected time range.</p>';
+          return;
+        }
+
+        const pathCoords = logs.map(log => [parseFloat(log.latitude), parseFloat(log.longitude)]).reverse();
+
+        // Draw polyline
+        historyPolyline = L.polyline(pathCoords, {
+          color: '#f43f5e',
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '5, 10'
+        }).addTo(map);
+
+        // Add start (green) and end (red) marker circles
+        const startPoint = pathCoords[0];
+        const endPoint = pathCoords[pathCoords.length - 1];
+
+        historyStartMarker = L.circleMarker(startPoint, {
+          radius: 8,
+          fillColor: '#10b981',
+          color: '#fff',
+          weight: 2,
+          fillOpacity: 1
+        }).addTo(map).bindPopup("<b>Trip Start Point</b>");
+
+        historyEndMarker = L.circleMarker(endPoint, {
+          radius: 8,
+          fillColor: '#f43f5e',
+          color: '#fff',
+          weight: 2,
+          fillOpacity: 1
+        }).addTo(map).bindPopup("<b>Trip End Point</b>");
+
+        // Fit map bounds to show entire line
+        map.fitBounds(historyPolyline.getBounds(), { padding: [50, 50] });
+
+        summary.innerHTML = `
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-size: 13px;">
+            <p style="color: var(--accent-color); font-weight: 600; margin-bottom: 6px;">History Summary</p>
+            <p><b>Points Mapped:</b> ${logs.length} coordinate logs</p>
+            <p><b>Start Time:</b> ${new Date(logs[logs.length-1].timestamp).toLocaleString()}</p>
+            <p><b>End Time:</b> ${new Date(logs[0].timestamp).toLocaleString()}</p>
+          </div>
+        `;
+      } catch (err) {
+        console.error("Error querying history:", err);
+      }
+    }
+
+    function clearHistoryPath() {
+      if (historyPolyline) map.removeLayer(historyPolyline);
+      if (historyStartMarker) map.removeLayer(historyStartMarker);
+      if (historyEndMarker) map.removeLayer(historyEndMarker);
+      document.getElementById('history-summary').innerHTML = '';
+    }
+
+    // Auto-refresh management
+    function startAutoRefresh() {
+      fetchVehicles();
+      autoRefreshInterval = setInterval(fetchVehicles, 5000);
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    }
+
+    // Initialize UI icons & start refresh
+    lucide.createIcons();
+    startAutoRefresh();
+  </script>
+</body>
+</html>

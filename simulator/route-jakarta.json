@@ -1,0 +1,12 @@
+[
+  {"latitude": -6.175392, "longitude": 106.827153, "speed": 40.0, "heading": 180.0},
+  {"latitude": -6.180231, "longitude": 106.824151, "speed": 45.0, "heading": 210.0},
+  {"latitude": -6.186521, "longitude": 106.823010, "speed": 35.0, "heading": 180.0},
+  {"latitude": -6.193245, "longitude": 106.822890, "speed": 50.0, "heading": 180.0},
+  {"latitude": -6.199101, "longitude": 106.822601, "speed": 30.0, "heading": 180.0},
+  {"latitude": -6.205230, "longitude": 106.822300, "speed": 55.0, "heading": 180.0},
+  {"latitude": -6.211421, "longitude": 106.821900, "speed": 60.0, "heading": 180.0},
+  {"latitude": -6.218321, "longitude": 106.819300, "speed": 42.0, "heading": 225.0},
+  {"latitude": -6.223451, "longitude": 106.812351, "speed": 48.0, "heading": 270.0},
+  {"latitude": -6.225010, "longitude": 106.804501, "speed": 30.0, "heading": 260.0}
+]
