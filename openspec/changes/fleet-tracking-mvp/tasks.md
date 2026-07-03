@@ -1,8 +1,8 @@
 ## 1. Setup Project & Database
 
-- [ ] 1.1 Inisialisasi package.json dan instal dependensi backend (express, sqlite3/better-sqlite3, cors)
-- [ ] 1.2 Setup skema database SQLite (`vehicles` dan `location_logs`) dan script migrasi/inisisalisasi DB
-- [ ] 1.3 Implementasi utility helper koneksi database di backend
+- [ ] 1.1 Inisialisasi package.json dan instal dependensi backend (express, cors, drizzle-orm, better-sqlite3, dotenv) serta devDependencies (drizzle-kit)
+- [ ] 1.2 Konfigurasi `drizzle.config.js` dan buat definisi skema database Drizzle (`schema.js` untuk `vehicles` dan `location_logs`)
+- [ ] 1.3 Lakukan inisialisasi database dan jalankan migrasi Drizzle (`drizzle-kit push` atau `drizzle-kit generate`) untuk membuat berkas SQLite lokal dan tabelnya
 
 ## 2. Implementasi Ingestion & Retrieve API
 

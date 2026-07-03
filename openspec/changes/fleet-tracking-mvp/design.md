@@ -22,12 +22,14 @@ Dokumen ini mendefinisikan arsitektur backend, database, dan frontend untuk Fase
 - **Pilihan:** Node.js (Express) dengan ES Modules.
 - **Rasional:** Cepat dideploy, performa I/O non-blocking yang sangat baik untuk menangani streaming data koordinat, dan memudahkan integrasi backend dengan dashboard frontend karena menggunakan bahasa pemrograman yang sama (JavaScript).
 
-### 2. Database: SQLite
-- **Pilihan:** SQLite (menggunakan library `sqlite3` atau `better-sqlite3`).
-- **Rasional:** Ringan, berbasis file tunggal, tanpa konfigurasi server tambahan (zero-config), sangat ideal untuk tahap MVP dan pengembangan lokal. 
-- **Skema Database:**
-  - `vehicles`: `id` (TEXT/UUID, Primary Key), `name` (TEXT), `status` (TEXT), `updated_at` (DATETIME)
-  - `location_logs`: `id` (INTEGER, Primary Key Autoincrement), `vehicle_id` (TEXT, FK), `latitude` (REAL), `longitude` (REAL), `speed` (REAL), `heading` (REAL), `timestamp` (DATETIME)
+### 2. Database: SQLite dengan Drizzle ORM
+- **Pilihan:** SQLite (menggunakan driver `better-sqlite3`) dikelola menggunakan **Drizzle ORM** (TypeScript/JavaScript).
+- **Rasional:** 
+  - **SQLite** sangat ringan, berbasis file tunggal, dan tidak memerlukan server database tambahan untuk tahap MVP.
+  - **Drizzle ORM** memisahkan definisi skema dari mesin database. Kita mendefinisikan skema tabel sekali di kode JS/TS. Drizzle mempermudah migrasi ke PostgreSQL nantinya karena sintaksis query-nya sama; kita hanya perlu mengganti inisialisasi driver dari `drizzle-orm/better-sqlite3` ke `drizzle-orm/node-postgres` dan mengubah connection string di berkas konfigurasi.
+- **Skema Database (Drizzle Schema):**
+  - `vehicles`: `id` (text, primary key), `name` (text), `status` (text), `updatedAt` (integer/timestamp)
+  - `location_logs`: `id` (integer, primary key autoincrement), `vehicleId` (text, foreign key references `vehicles.id`), `latitude` (real), `longitude` (real), `speed` (real), `heading` (real), `timestamp` (integer/timestamp)
 
 ### 3. Frontend Map: Leaflet.js dengan OpenStreetMap
 - **Pilihan:** Leaflet.js via CDN.
