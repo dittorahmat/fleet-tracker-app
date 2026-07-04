@@ -4,8 +4,17 @@ import { getDb } from "./db/connection.js";
 import { vehicles, locationLogs } from "./db/schema.js";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
+import { logger } from "hono/logger";
+
 const app = new Hono();
+app.use("*", logger());
 app.use("*", cors());
+
+// Detailed error handler for debugging
+app.onError((err, c) => {
+  console.error("Hono Application Error:", err);
+  return c.json({ error: err.message, stack: err.stack }, 500);
+});
 
 // Prevent favicon.ico 404 errors
 app.get("/favicon.ico", (c) => c.body(null, 204));
