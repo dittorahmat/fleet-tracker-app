@@ -578,7 +578,7 @@
       }
     }
 
-    // Retrieve and draw historical route path
+    // Retrieve and draw historical route path (snapped to roads using OSRM API)
     async function queryHistory() {
       const vehicleId = document.getElementById('history-vehicle').value;
       const start = document.getElementById('history-start').value;
@@ -609,13 +609,39 @@
 
         const pathCoords = logs.map(log => [parseFloat(log.latitude), parseFloat(log.longitude)]).reverse();
 
-        // Draw polyline
-        historyPolyline = L.polyline(pathCoords, {
-          color: '#f43f5e',
-          weight: 4,
-          opacity: 0.8,
-          dashArray: '5, 10'
-        }).addTo(map);
+        // Query OSRM routing engine to match paths to actual roads
+        const osrmCoords = pathCoords.map(coord => `${coord[1]},${coord[0]}`).join(';');
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+
+        try {
+          summary.innerHTML = '<p style="color: var(--text-muted)"><i data-lucide="loader-2" class="animate-spin" style="display:inline-block; vertical-align:middle; margin-right:6px; width:16px;"></i> Snapping path to road routing...</p>';
+          lucide.createIcons();
+
+          const osrmResponse = await fetch(osrmUrl);
+          const osrmData = await osrmResponse.json();
+
+          if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes[0]) {
+            const snappedCoords = osrmData.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            
+            // Draw snapped road route
+            historyPolyline = L.polyline(snappedCoords, {
+              color: '#f43f5e',
+              weight: 4,
+              opacity: 0.9
+            }).addTo(map);
+          } else {
+            throw new Error("OSRM failed to find route");
+          }
+        } catch (osrmErr) {
+          console.warn("OSRM route matching failed. Falling back to straight lines.", osrmErr);
+          // Fallback to straight line polyline
+          historyPolyline = L.polyline(pathCoords, {
+            color: '#f43f5e',
+            weight: 4,
+            opacity: 0.8,
+            dashArray: '5, 10'
+          }).addTo(map);
+        }
 
         // Add start (green) and end (red) marker circles
         const startPoint = pathCoords[0];
