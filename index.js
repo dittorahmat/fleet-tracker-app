@@ -61,7 +61,7 @@ app.post("/api/locations", async (c) => {
     return c.json({ message: "Location telemetry recorded successfully" }, 201);
   } catch (error) {
     console.error("Error ingesting location:", error);
-    return c.json({ error: "Internal server error" }, 500);
+    return c.json({ error: error.message, stack: error.stack }, 500);
   }
 });
 
@@ -90,7 +90,7 @@ app.get("/api/vehicles", async (c) => {
     return c.json(result);
   } catch (error) {
     console.error("Error retrieving vehicles:", error);
-    return c.json({ error: "Internal server error" }, 500);
+    return c.json({ error: error.message, stack: error.stack }, 500);
   }
 });
 
@@ -119,7 +119,7 @@ app.get("/api/vehicles/:id/history", async (c) => {
     return c.json(history);
   } catch (error) {
     console.error("Error retrieving vehicle history:", error);
-    return c.json({ error: "Internal server error" }, 500);
+    return c.json({ error: error.message, stack: error.stack }, 500);
   }
 });
 
