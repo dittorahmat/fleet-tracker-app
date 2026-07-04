@@ -1,19 +1,18 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
-import { sql } from "drizzle-orm";
+import { pgTable, varchar, serial, doublePrecision, timestamp } from "drizzle-orm/pg-core";
 
-export const vehicles = sqliteTable("vehicles", {
-  id: text("id").primaryKey(), // Device ID/IMEI
-  name: text("name").notNull(),
-  status: text("status").notNull().default("active"),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`),
+export const vehicles = pgTable("vehicles", {
+  id: varchar("id", { length: 256 }).primaryKey(), // Device ID/IMEI
+  name: varchar("name", { length: 256 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull().default("active"),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
 
-export const locationLogs = sqliteTable("location_logs", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  vehicleId: text("vehicle_id").notNull().references(() => vehicles.id),
-  latitude: real("latitude").notNull(),
-  longitude: real("longitude").notNull(),
-  speed: real("speed").notNull(),
-  heading: real("heading").notNull(),
-  timestamp: integer("timestamp", { mode: "timestamp" }).notNull(),
+export const locationLogs = pgTable("location_logs", {
+  id: serial("id").primaryKey(),
+  vehicleId: varchar("vehicle_id", { length: 256 }).notNull().references(() => vehicles.id),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  speed: doublePrecision("speed").notNull(),
+  heading: doublePrecision("heading").notNull(),
+  timestamp: timestamp("timestamp", { mode: "date" }).notNull(),
 });
