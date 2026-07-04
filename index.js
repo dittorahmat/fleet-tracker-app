@@ -7,6 +7,9 @@ import { eq, desc, and, gte, lte } from "drizzle-orm";
 const app = new Hono();
 app.use("*", cors());
 
+// Prevent favicon.ico 404 errors
+app.get("/favicon.ico", (c) => c.body(null, 204));
+
 // Helper function to upsert vehicle
 async function ensureVehicleExists(db, id) {
   const existing = await db.select().from(vehicles).where(eq(vehicles.id, id));
