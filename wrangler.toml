@@ -2,6 +2,7 @@ name = "fleet-tracker-app"
 main = "index.js"
 compatibility_date = "2026-07-04"
 compatibility_flags = [ "nodejs_compat" ]
+workers_dev = true
 
 [vars]
 # DATABASE_URL should be set as a wrangler secret or environment variable
