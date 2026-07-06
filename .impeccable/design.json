@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-05T06:30:00Z",
+  "title": "Design System: FleetTracker PRO",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Radar Indigo", "canonical": "#6366f1", "tonalRamp": ["#0f1026", "#1e204d", "#2d3073", "#3d4099", "#4c50bf", "#6366f1", "#818cf8", "#a5b4fc"] },
+      "neutral-bg": { "role": "background", "displayName": "Midnight Void", "canonical": "#020617", "tonalRamp": ["#01020a", "#02040f", "#020617", "#050d2c", "#081442", "#0b1b57", "#0d226d", "#102982"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Header title of the panels." },
+      "body": { "displayName": "Body", "purpose": "Default paragraphs and description text." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "instant", "value": "none", "purpose": "Instant transition for radar-style control items." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard action button for primary controls.",
+      "html": "<button class=\"ds-btn-primary\">LOCATE</button>",
+      "css": ".ds-btn-primary { background: #6366f1; color: #ffffff; padding: 6px 12px; font-size: 11px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; transition: background 0.1s ease; } .ds-btn-primary:hover { background: #4f46e5; }"
+    },
+    {
+      "name": "Sidebar Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Information card used inside sidebars for vehicles.",
+      "html": "<div class=\"ds-sidebar-card\"><div class=\"ds-card-header\"><h4>Vehicle TRK-01</h4><span class=\"ds-badge\">active</span></div><p>Speed: 45.2 km/h</p></div>",
+      "css": ".ds-sidebar-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 14px; color: #slate-100; font-family: sans-serif; } .ds-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; } .ds-card-header h4 { margin: 0; font-size: 14px; color: #ffffff; } .ds-badge { font-size: 10px; font-weight: bold; background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); padding: 2px 8px; border-radius: 9999px; text-transform: uppercase; } .ds-sidebar-card p { margin: 0; font-size: 12px; color: #94a3b8; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Midnight Radar",
+    "overview": "FleetTracker PRO is designed as a high-density, real-time command console for dark control room environments. It mimics the visual language of navigation radars and flight control panels, focusing on extreme legibility under dim ambient lighting.",
+    "keyCharacteristics": [
+      "High contrast, dark-drenched background theme (Slate-950).",
+      "Grid structure separated by crisp, solid 1px borders (Slate-800).",
+      "Pure-color status indicators (Green for active, Amber for warnings, Red for critical).",
+      "Zero drop shadows or glowing card elevations."
+    ],
+    "rules": [
+      { "name": "The Border Partition Rule", "body": "Depth is communicated through flat container nesting. Drop shadows are strictly prohibited. Borders must be solid 1px using the Grid Divider (#1e293b) to separate panels.", "section": "colors" },
+      { "name": "The Accent Sparing Rule", "body": "Bright colors (Green, Amber, Red) must only be used for active markers or warnings. Background panels must remain dark and neutral to ensure alerts stand out instantly.", "section": "colors" }
+    ],
+    "dos": [
+      "Do use monospace fonts for telemetry readings, coordinates, and timestamps.",
+      "Do separate panels with solid 1px borders of value `#1e293b`.",
+      "Do pair colors with distinct icons (such as warning triangles or checkmarks) for alerts to maintain color-blind accessibility."
+    ],
+    "donts": [
+      "Don't use drop shadows (`box-shadow`) on cards or buttons.",
+      "Don't use gradients or glassmorphism on background elements.",
+      "Don't use soft, low-contrast pastel colors for active statuses or alarms.",
+      "Don't use large card border-radii exceeding 16px."
+    ]
+  }
+}
