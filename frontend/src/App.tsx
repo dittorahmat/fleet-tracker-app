@@ -7,6 +7,7 @@ import {
   Circle,
   Polyline,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import {
@@ -39,6 +40,9 @@ interface LocationTelemetry {
   longitude: number;
   speed: number;
   heading: number;
+  accStatus?: boolean;
+  relayStatus?: boolean;
+  batteryLevel?: number;
   timestamp: string | Date;
 }
 
@@ -46,6 +50,15 @@ interface Vehicle {
   id: string;
   name: string;
   status: string;
+  plateNumber?: string | null;
+  vehicleType?: string | null;
+  rentStatus?: string;
+  odometer?: string | number;
+  nextOilChange?: string | number;
+  taxDueDate?: string | Date | null;
+  accStatus?: boolean;
+  relayStatus?: boolean;
+  batteryLevel?: number;
   updatedAt: string | Date;
   lastLocation: LocationTelemetry | null;
 }
@@ -120,6 +133,15 @@ function ChangeMapView({ center, zoom, bounds }: { center: [number, number]; zoo
   return null;
 }
 
+function MapEventsHandler({ onDoubleClick }: { onDoubleClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    dblclick(e) {
+      onDoubleClick(e.latlng.lat, e.latlng.lng);
+    }
+  });
+  return null;
+}
+
 const API_BASE = window.location.port === "5173" ? "http://localhost:3000" : "";
 
 export default function App() {
@@ -128,6 +150,16 @@ export default function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [toasts, setToasts] = useState<ToastAlert[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  
+  // Edit vehicle metadata states
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPlate, setEditPlate] = useState("");
+  const [editType, setEditType] = useState("");
+  const [editRentStatus, setEditRentStatus] = useState("available");
+  const [editOdometer, setEditOdometer] = useState("");
+  const [editNextOil, setEditNextOil] = useState("");
+  const [editTaxDue, setEditTaxDue] = useState("");
   
   // Search query
   const [searchQuery, setSearchQuery] = useState("");
@@ -209,6 +241,9 @@ export default function App() {
               id: payload.vehicleId,
               name: `Vehicle ${payload.vehicleId.substring(0, 6)}`,
               status: "active",
+              accStatus: payload.accStatus,
+              relayStatus: payload.relayStatus,
+              batteryLevel: payload.batteryLevel,
               updatedAt: payload.timestamp,
               lastLocation: payload,
             },
@@ -217,12 +252,32 @@ export default function App() {
           const updated = [...prevVehicles];
           updated[index] = {
             ...updated[index],
+            accStatus: payload.accStatus !== undefined ? payload.accStatus : updated[index].accStatus,
+            relayStatus: payload.relayStatus !== undefined ? payload.relayStatus : updated[index].relayStatus,
+            batteryLevel: payload.batteryLevel !== undefined ? payload.batteryLevel : updated[index].batteryLevel,
             updatedAt: payload.timestamp,
             lastLocation: payload,
           };
           return updated;
         }
       });
+    });
+
+    // Vehicle metadata updates
+    eventSource.addEventListener("vehicle_update", (e) => {
+      const payload = JSON.parse(e.data);
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === payload.id ? { 
+          ...v, 
+          name: payload.name,
+          plateNumber: payload.plateNumber,
+          vehicleType: payload.vehicleType,
+          rentStatus: payload.rentStatus,
+          odometer: payload.odometer,
+          nextOilChange: payload.nextOilChange,
+          taxDueDate: payload.taxDueDate
+        } : v))
+      );
     });
 
     // Alert updates
@@ -336,6 +391,42 @@ export default function App() {
     const vehicle = vehicles.find((v) => v.id === vehicleId);
     if (vehicle) {
       handleCenterOnVehicle(vehicle);
+    }
+  };
+
+  const handleMapDoubleClick = async (lat: number, lng: number) => {
+    const name = prompt("Enter new Geofence name:");
+    if (!name) return;
+
+    const radiusInput = prompt("Enter radius in meters (e.g. 500):", "500");
+    if (!radiusInput) return;
+    const radiusMeters = parseFloat(radiusInput);
+    if (isNaN(radiusMeters) || radiusMeters <= 0) {
+      alert("Invalid radius!");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/geofences`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          centerLatitude: lat,
+          centerLongitude: lng,
+          radiusMeters
+        })
+      });
+      if (res.ok) {
+        const newGf = await res.json();
+        setGeofences((prev) => [...prev, newGf]);
+        alert("Geofence created successfully!");
+      } else {
+        const errData = await res.json();
+        alert(`Error: ${errData.error}`);
+      }
+    } catch (err: any) {
+      alert(`Failed to save geofence: ${err.message}`);
     }
   };
 
@@ -494,6 +585,20 @@ export default function App() {
                       </span>
                     </div>
 
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px] border-t border-radar-border/40 pt-1.5">
+                      <span className={`font-mono flex items-center gap-1 ${vehicle.accStatus ? "text-radar-green font-bold" : "text-slate-500"}`}>
+                        ● ACC: {vehicle.accStatus ? "ON" : "OFF"}
+                      </span>
+                      <span className="text-slate-400 font-mono">
+                        ⚡ Bat: {vehicle.batteryLevel ?? 100}%
+                      </span>
+                      {vehicle.relayStatus && (
+                        <span className="bg-radar-red/25 text-radar-red border border-radar-red/30 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider">
+                          IMMOBILIZED
+                        </span>
+                      )}
+                    </div>
+
                     {loc ? (
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs border-t border-radar-border/80 pt-2.5 text-slate-400">
                         <div className="flex items-center gap-1.5">
@@ -516,31 +621,116 @@ export default function App() {
                       <p className="text-xs text-slate-600 mt-2">No location details logged.</p>
                     )}
 
-                    {/* Actions Panel */}
                     {isSelected && (
-                      <div className="mt-3 flex items-center justify-between border-t border-radar-border/80 pt-2 gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleLoadHistory(vehicle.id);
-                          }}
-                          aria-label={`View history logs of vehicle ${vehicle.id}`}
-                          className="flex-1 flex items-center justify-center gap-1.5 bg-radar-bg border border-radar-border text-[11px] font-semibold py-1.5 rounded-lg hover:bg-radar-surface hover:text-white transition-colors"
-                        >
-                          <History className="w-3 h-3" />
-                          <span>View History</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCenterOnVehicle(vehicle);
-                          }}
-                          aria-label={`Locate vehicle ${vehicle.id} on map`}
-                          className="flex-1 flex items-center justify-center gap-1.5 bg-radar-primary text-white text-[11px] font-semibold py-1.5 rounded-lg hover:bg-radar-primary-hover transition-colors"
-                        >
-                          <MapPin className="w-3 h-3" />
-                          <span>Locate</span>
-                        </button>
+                      <div className="mt-3 flex flex-col gap-2 border-t border-radar-border/80 pt-2.5">
+                        {/* Extended Metadata Display */}
+                        <div className="bg-radar-bg/60 p-3 rounded-lg border border-radar-border/80 text-[11px] space-y-1.5 font-mono text-slate-300">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Plate Number:</span>
+                            <span className="font-bold text-slate-200">{vehicle.plateNumber || "-"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Vehicle Type:</span>
+                            <span className="text-slate-200">{vehicle.vehicleType || "-"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Odometer:</span>
+                            <span className="font-bold text-radar-primary">{vehicle.odometer || "0.00"} km</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Next Oil Service:</span>
+                            <span className="text-radar-amber">{vehicle.nextOilChange || "10000"} km</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Rent Status:</span>
+                            <span className={`font-bold px-1.5 rounded uppercase ${
+                              vehicle.rentStatus === 'available' ? 'text-radar-green bg-radar-green/10' :
+                              vehicle.rentStatus === 'rented' ? 'text-radar-amber bg-radar-amber/10' : 'text-slate-400 bg-slate-400/10'
+                            }`}>
+                              {vehicle.rentStatus || 'available'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditName(vehicle.name);
+                              setEditPlate(vehicle.plateNumber || "");
+                              setEditType(vehicle.vehicleType || "");
+                              setEditRentStatus(vehicle.rentStatus || "available");
+                              setEditOdometer(String(vehicle.odometer || "0"));
+                              setEditNextOil(String(vehicle.nextOilChange || "10000"));
+                              setEditTaxDue(vehicle.taxDueDate ? new Date(vehicle.taxDueDate).toISOString().substring(0, 10) : "");
+                              setIsEditingMetadata(true);
+                            }}
+                            className="flex-1 bg-radar-bg border border-radar-border text-[11px] font-semibold py-1.5 rounded-lg hover:bg-radar-surface hover:text-white transition-colors"
+                          >
+                            Edit Details
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLoadHistory(vehicle.id);
+                            }}
+                            aria-label={`View history logs of vehicle ${vehicle.id}`}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-radar-bg border border-radar-border text-[11px] font-semibold py-1.5 rounded-lg hover:bg-radar-surface hover:text-white transition-colors"
+                          >
+                            <History className="w-3 h-3" />
+                            <span>History</span>
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCenterOnVehicle(vehicle);
+                            }}
+                            aria-label={`Locate vehicle ${vehicle.id} on map`}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-radar-primary text-white text-[11px] font-semibold py-1.5 rounded-lg hover:bg-radar-primary-hover transition-colors"
+                          >
+                            <MapPin className="w-3 h-3" />
+                            <span>Locate</span>
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              
+                              const confirmPin = prompt("Enter Admin PIN to toggle vehicle power state:");
+                              if (confirmPin !== "1234") {
+                                alert("Unauthorized! Incorrect Admin PIN.");
+                                return;
+                              }
+
+                              const newStatus = !vehicle.relayStatus;
+                              try {
+                                const res = await fetch(`${API_BASE}/api/vehicles/${vehicle.id}/immobilize`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ status: newStatus })
+                                });
+                                const data = await res.json();
+                                if (res.ok) {
+                                  alert(data.message);
+                                  setVehicles(prev => prev.map(v => v.id === vehicle.id ? { ...v, relayStatus: newStatus } : v));
+                                } else {
+                                  alert(`Error: ${data.error}`);
+                                }
+                              } catch (err: any) {
+                                alert(`Connection failed: ${err.message}`);
+                              }
+                            }}
+                            aria-label={`Toggle engine power for vehicle ${vehicle.id}`}
+                            className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-1.5 rounded-lg border transition-colors ${
+                              vehicle.relayStatus
+                                ? "bg-radar-red text-white hover:bg-radar-red/80 border-radar-red"
+                                : "bg-radar-bg border-radar-red/40 text-radar-red hover:bg-radar-red/10"
+                            }`}
+                          >
+                            <span>{vehicle.relayStatus ? "Enable Engine" : "Disable Engine"}</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -558,7 +748,9 @@ export default function App() {
               zoom={mapZoom}
               className="w-full h-full z-0"
               zoomControl={false}
+              doubleClickZoom={false}
             >
+              <MapEventsHandler onDoubleClick={handleMapDoubleClick} />
               {/* Dark Styled OpenStreetMap Tiles */}
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -801,9 +993,35 @@ export default function App() {
               alerts.map((alert, idx) => {
                 const isOverSpeed = alert.type === "overspeeding";
                 const isExit = alert.type === "geofence_exit";
-                const cardBorder = isOverSpeed ? "border-radar-red/30 bg-radar-red/5" : isExit ? "border-radar-amber/30 bg-radar-amber/5" : "border-radar-primary/30 bg-radar-primary/5";
-                const badgeText = isOverSpeed ? "Speed Limit" : isExit ? "Geofence Exit" : "Geofence Entry";
-                const badgeColor = isOverSpeed ? "bg-radar-red/20 text-radar-red" : isExit ? "bg-radar-amber/20 text-radar-amber" : "bg-radar-primary/20 text-radar-primary";
+                const isPowerCut = alert.type === "power_cut";
+                const isMaintenance = alert.type === "maintenance_reminder";
+                const cardBorder = isPowerCut
+                  ? "border-radar-red bg-radar-red/10 animate-pulse border-2 shadow-lg shadow-radar-red/10"
+                  : isOverSpeed
+                  ? "border-radar-red/30 bg-radar-red/5"
+                  : isExit
+                  ? "border-radar-amber/30 bg-radar-amber/5"
+                  : isMaintenance
+                  ? "border-radar-amber/50 bg-radar-amber/10"
+                  : "border-radar-primary/30 bg-radar-primary/5";
+                const badgeText = isPowerCut
+                  ? "SABOTAGE / POWER CUT"
+                  : isOverSpeed
+                  ? "Speed Limit"
+                  : isExit
+                  ? "Geofence Exit"
+                  : isMaintenance
+                  ? "Maintenance"
+                  : "Geofence Entry";
+                const badgeColor = isPowerCut
+                  ? "bg-radar-red text-white"
+                  : isOverSpeed
+                  ? "bg-radar-red/20 text-radar-red"
+                  : isExit
+                  ? "bg-radar-amber/20 text-radar-amber"
+                  : isMaintenance
+                  ? "bg-radar-amber/30 text-radar-amber"
+                  : "bg-radar-primary/20 text-radar-primary";
 
                 return (
                   <div
@@ -849,31 +1067,34 @@ export default function App() {
       {/* Floating sliding Toast notifications for real-time notifications */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none">
         {toasts.map((toast) => {
+          const isPowerCut = toast.type === "power_cut";
           const isOverSpeed = toast.type === "overspeeding";
-          const iconColor = isOverSpeed ? "text-radar-red" : "text-radar-amber";
+          const iconColor = isPowerCut ? "text-white animate-pulse" : isOverSpeed ? "text-radar-red" : "text-radar-amber";
+          const toastBg = isPowerCut ? "bg-radar-red border-white text-white animate-bounce shadow-radar-red/20 shadow-2xl" : "bg-radar-surface/95 border-radar-border text-slate-100";
+          const toastBadge = isPowerCut ? "text-white font-bold" : "text-radar-primary font-bold";
           
           return (
             <div
               key={toast.id}
-              className="w-80 bg-radar-surface/95 border border-radar-border p-4 rounded-xl shadow-2xl flex gap-3.5 pointer-events-auto animate-slide-in backdrop-blur-md"
+              className={`w-80 border p-4 rounded-xl shadow-2xl flex gap-3.5 pointer-events-auto animate-slide-in backdrop-blur-md ${toastBg}`}
               style={{
                 animation: "slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
               }}
             >
-              <div className="shrink-0 p-1.5 bg-radar-bg rounded-lg">
+              <div className="shrink-0 p-1.5 bg-radar-bg/40 rounded-lg">
                 <AlertTriangle className={`w-5 h-5 ${iconColor}`} />
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-radar-primary uppercase tracking-wide">
-                    New Alert Triggered
+                  <span className={`text-[10px] uppercase tracking-wide ${toastBadge}`}>
+                    {isPowerCut ? "CRITICAL SABOTAGE" : "New Alert Triggered"}
                   </span>
-                  <span className="text-[9px] text-slate-500">Just Now</span>
+                  <span className={`text-[9px] ${isPowerCut ? "text-white/80" : "text-slate-500"}`}>Just Now</span>
                 </div>
-                <h4 className="text-xs font-bold text-slate-100 mt-1 m-0">
+                <h4 className={`text-xs font-bold mt-1 m-0 ${isPowerCut ? "text-white" : "text-slate-100"}`}>
                   Vehicle {toast.vehicleId}
                 </h4>
-                <p className="text-[11px] text-slate-400 mt-0.5 m-0">
+                <p className={`text-[11px] mt-0.5 m-0 ${isPowerCut ? "text-white/90" : "text-slate-400"}`}>
                   {toast.message}
                 </p>
               </div>
@@ -881,6 +1102,144 @@ export default function App() {
           );
         })}
       </div>
+
+      {/* Edit Vehicle Metadata Modal */}
+      {isEditingMetadata && selectedVehicleId && (() => {
+        const vehicle = vehicles.find(v => v.id === selectedVehicleId);
+        if (!vehicle) return null;
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-radar-surface border border-radar-border w-full max-w-md p-6 rounded-2xl shadow-2xl animate-fade-in text-xs">
+              <div className="flex items-center justify-between border-b border-radar-border pb-3 mb-4">
+                <h3 className="font-bold text-white text-sm m-0">Edit Vehicle Information</h3>
+                <button
+                  onClick={() => setIsEditingMetadata(false)}
+                  className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded bg-radar-bg hover:bg-radar-border border border-radar-border cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const res = await fetch(`${API_BASE}/api/vehicles/${selectedVehicleId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: editName,
+                      plateNumber: editPlate,
+                      vehicleType: editType,
+                      rentStatus: editRentStatus,
+                      odometer: editOdometer,
+                      nextOilChange: editNextOil,
+                      taxDueDate: editTaxDue || null
+                    })
+                  });
+                  if (res.ok) {
+                    const updated = await res.json();
+                    setVehicles(prev => prev.map(v => v.id === selectedVehicleId ? { ...v, ...updated } : v));
+                    alert("Vehicle metadata updated successfully!");
+                    setIsEditingMetadata(false);
+                  } else {
+                    const errData = await res.json();
+                    alert(`Error: ${errData.error}`);
+                  }
+                } catch (err: any) {
+                  alert(`Update failed: ${err.message}`);
+                }
+              }} className="space-y-3 text-slate-300">
+                <div>
+                  <label className="block text-slate-400 mb-1">Vehicle Name:</label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1">Plate Number:</label>
+                    <input
+                      type="text"
+                      value={editPlate}
+                      onChange={e => setEditPlate(e.target.value)}
+                      className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Vehicle Type:</label>
+                    <input
+                      type="text"
+                      value={editType}
+                      onChange={e => setEditType(e.target.value)}
+                      placeholder="e.g. Toyota Avanza"
+                      className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1">Odometer (km):</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={editOdometer}
+                      onChange={e => setEditOdometer(e.target.value)}
+                      className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Next Oil Change (km):</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={editNextOil}
+                      onChange={e => setEditNextOil(e.target.value)}
+                      className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1">Rent Status:</label>
+                    <select
+                      value={editRentStatus}
+                      onChange={e => setEditRentStatus(e.target.value)}
+                      className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                    >
+                      <option value="available">Available</option>
+                      <option value="rented">Rented</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Tax Due Date:</label>
+                    <input
+                      type="date"
+                      value={editTaxDue}
+                      onChange={e => setEditTaxDue(e.target.value)}
+                      className="w-full bg-radar-bg border border-radar-border rounded p-2 text-white"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-4 bg-radar-primary hover:bg-radar-primary-hover text-white font-bold py-2 rounded transition-colors cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Info Modal / System Guidelines */}
       {isInfoOpen && (

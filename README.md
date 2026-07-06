@@ -1,55 +1,28 @@
 # Fleet Tracking Application
 
-A runtime-agnostic, serverless-ready Fleet Tracking Application MVP built using **Hono**, **Drizzle ORM**, and **PostgreSQL**. 
+A runtime-agnostic, serverless-ready Fleet Tracking Application MVP built using **Hono**, **Drizzle ORM**, **Tailwind CSS**, and **PostgreSQL**. 
 
 Designed to run seamlessly in both **Cloudflare Workers** (serverless) and **Node.js** (on-premise / local development) environments with zero code modifications.
 
----
-
-## Architecture Design
-
-```
-                      ┌────────────────────────┐
-                      │    Aplikasi Hono API   │
-                      │  (Router & Query Logic)│
-                      └───────────┬────────────┘
-                                  │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-  [ CLOUDFLARE WORKER ]                              [ ON-PREMISE NODE.JS ]
-  Entrypoint: index.js                               Entrypoint: server.js
-  ┌─────────────────────────┐                        ┌─────────────────────────┐
-  │ fetch handler (default) │                        │ @hono/node-server       │
-  │                         │                        │ (Express-like HTTP)     │
-  │ DB Driver:              │                        │                         │
-  │ @neondatabase/serverless│                        │ DB Driver:              │
-  │ (HTTP Client)           │                        │ pg (node-postgres Pool) │
-  └──────────┬──────────────┘                        └──────────┬──────────────┘
-             │                                                  │
-             ▼                                                  ▼
-      ┌─────────────┐                                    ┌─────────────┐
-      │ Neon Tech   │                                    │ PostgreSQL  │
-      │ (Postgres)  │                                    │ On-Premise  │
-      └─────────────┘                                    └─────────────┘
-```
+It features a dual-mode ingestion server (HTTP REST API + raw TCP Sockets) to support both simulator streams and standard commercial GPS Tracker hardware (Concox GT06/Jimi protocols).
 
 ---
 
-## Tech Stack
+## Technical Stack
 
-- **Framework**: [Hono](https://hono.dev/) (Cross-runtime web framework)
-- **Database**: PostgreSQL (Hosted on Neon Tech or Local/On-Premise PostgreSQL)
-- **ORM**: [Drizzle ORM](https://orm.drizzle.team/)
-- **Node.js Serve Utility**: `@hono/node-server`
-- **Frontend Dashboard**: Vanilla HTML / CSS / JavaScript (located in `public/`)
+- **Backend**: [Hono](https://hono.dev/) (run via `tsx` on Node.js locally, deployable to Cloudflare Workers).
+- **Database**: PostgreSQL (Neon Tech or on-premise) with **Drizzle ORM**.
+- **TCP Socket Server**: Node.js `net` library listener running on port `8000` (handles GT06 handshake, logins, location telemetry, heartbeat, and alarms).
+- **Frontend**: React SPA built with Vite, Tailwind CSS v4, and Leaflet Maps.
+- **SSE Manager**: In-memory manager broadcasting telemetry updates, metadata updates, and critical alarms dynamically.
 
 ---
 
-## Local Development (Node.js / On-Premise)
+## Local Development Setup
 
 ### 1. Prerequisites
 - Node.js (v18+)
-- Running PostgreSQL database instance
+- PostgreSQL database instance
 
 ### 2. Configuration Setup
 Create a `.env` file in the root directory:
@@ -64,98 +37,91 @@ npm install
 ```
 
 ### 4. Push Database Schema
-Apply tables (`vehicles`, `location_logs`) to your PostgreSQL database:
+Apply tables (`vehicles`, `location_logs`, `geofences`, `alerts`) and columns (including extended rental metadata, odometer, etc.) to your PostgreSQL database:
 ```bash
 npm run db:push
 ```
 
-### 5. Start Development Server
+### 5. Compile & Build Frontend Assets
+Make sure to build the React production bundle before running the app. The static assets are copied to `./public/` for Hono static file serving.
+```bash
+# Compile and build frontend assets
+npm run build --prefix frontend
+```
+
+### 6. Start Development Server
 ```bash
 npm run dev
 ```
-The server will start running at `http://localhost:3000`. You can open this URL in your browser to view the tracking dashboard.
-
-### 6. Run Telemetry Simulator
-To simulate coordinate log ingestion, run the simulator in a separate terminal:
-```bash
-# Usage: node simulator.js <device_id> <interval_ms>
-node simulator.js dev-truck-01 5000
-```
+- **Web Dashboard URL**: `http://localhost:3000`
+- **TCP Socket GPS Port**: `8000`
 
 ---
 
-## Cloudflare Workers Deployment
+## How to Setup & Configure GPS Tracker Hardware
 
-### 1. Prerequisite Configuration
-Ensure `wrangler.toml` in the project root is configured:
-```toml
-name = "fleet-tracking-app"
-main = "index.js"
-compatibility_date = "2026-07-04"
-```
+To connect a commercial GPS tracker (such as Concox GT06N, Jimi JM-VL03, or similar) to the application:
 
-### 2. Add Environment Secrets
-Bind your Neon Tech or PostgreSQL connection string to the Worker:
-```bash
-npx wrangler secret put DATABASE_URL
-```
-*(Enter your production database connection string when prompted)*
-
-### 3. Deploy
-```bash
-npx wrangler deploy
-```
+1. **Obtain IMEI Number**:
+   Find the unique 15-digit IMEI number printed on the sticker of the GPS tracker hardware. This IMEI acts as the unique `id` (or `deviceId`) in the database.
+2. **Install SIM Card**:
+   Insert a cellular SIM card (ideally Telkomsel IoT/M2M or similar with an active data package) into the GPS tracker.
+3. **Configure Tracker via SMS**:
+   Send the following SMS commands from your phone to the tracker's cellular number:
+   - **Configure APN** (depending on your SIM card operator):
+     ```text
+     APN,internet#
+     ```
+   - **Set Target IP and Port**:
+     Point the tracker to the public IP/Domain of your server and the TCP port `8000`:
+     ```text
+     SERVER,0,YOUR_SERVER_IP,8000,0#
+     ```
+   - **Configure Tracking Interval** (e.g., upload every 10 seconds):
+     ```text
+     TIMER,10#
+     ```
+Once configured, the GPS tracker will automatically log in to the TCP server, auto-create a vehicle record under the database, and begin transmitting live telemetry logs.
 
 ---
 
-## API Endpoints
+## How to Test & Simulate Telemetry Logs Locally
 
-### 1. `POST /api/locations`
-Ingest location telemetry logs for a vehicle.
+If you don't have access to physical GPS hardware, you can test all features using text-based simulator commands via **Netcat (`nc`)** or **Telnet**:
 
-- **Request Body**:
-  ```json
-  {
-    "device_id": "dev-truck-01",
-    "latitude": -6.175392,
-    "longitude": 106.827153,
-    "speed": 40.5,
-    "heading": 180,
-    "timestamp": "2026-07-04T12:00:00.000Z"
-  }
-  ```
-- **Response** (201 Created):
-  ```json
-  { "message": "Location telemetry recorded successfully" }
-  ```
+1. Open a new terminal and connect to the TCP socket listener:
+   ```bash
+   nc localhost 8000
+   ```
+2. **Simulate Login**:
+   Register your device on the active socket stream:
+   ```text
+   login:my-truck-01
+   ```
+   *Response from server:* `login:ok`
+3. **Simulate GPS Coordinates**:
+   Send coordinates in the format: `gps:lat,lng,speed,heading,acc,battery`:
+   ```text
+   gps:-6.175392,106.827153,45.0,180,true,88
+   ```
+   *Response from server:* `gps:ok`
+4. **Simulate Aki/Power Sabotage Alarm**:
+   Trigger a critical power cut alert to test anti-theft workflows:
+   ```text
+   alarm:power_cut
+   ```
+   *Response from server:* `alarm:ok`
 
-### 2. `GET /api/vehicles`
-Retrieve list of all active vehicles along with their last known location telemetry.
+---
 
-- **Response** (200 OK):
-  ```json
-  [
-    {
-      "id": "dev-truck-01",
-      "name": "Vehicle dev-tr",
-      "status": "active",
-      "updatedAt": "2026-07-04T12:00:00.000Z",
-      "lastLocation": {
-        "id": 1,
-        "vehicleId": "dev-truck-01",
-        "latitude": -6.175392,
-        "longitude": 106.827153,
-        "speed": 40.5,
-        "heading": 180,
-        "timestamp": "2026-07-04T12:00:00.000Z"
-      }
-    }
-  ]
-  ```
+## Using Dashboard Features
 
-### 3. `GET /api/vehicles/:id/history`
-Retrieve historical location logs for a specific vehicle.
-
-- **Query Parameters**:
-  - `start` (Optional ISO string): Filter logs starting from this timestamp.
-  - `end` (Optional ISO string): Filter logs up to this timestamp.
+- **Edit Vehicle Information**:
+  In the sidebar fleet list, select a vehicle, click **Edit Details**, and a modal will open. You can input plate numbers, type (e.g., Toyota Avanza), rental status, odometer, next oil change interval, and tax due date.
+- **Engine Power Control (Immobilizer)**:
+  Toggle the **Disable Engine** button in the vehicle's actions drawer. You will be prompted to enter the Admin PIN: **`1234`**. 
+  *Note:* To ensure safety, engine cut-off commands are automatically blocked by the server if the vehicle's live speed is greater than `20 km/h`.
+- **Draw Geofences**:
+  Double-click anywhere on the Leaflet map to trigger the geofence builder. Input the zone name and radius in meters, then click save. Live vehicle movements will trigger entering/exiting alerts dynamically.
+- **Real-Time Alarms Panel**:
+  The right sidebar displays a real-time feed of alerts (overspeeding, geofence exit, and critical power cut alarms). The critical power cut alert triggers a red flashing indicator and a bouncing toast notification.

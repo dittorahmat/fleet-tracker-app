@@ -1,9 +1,18 @@
-import { pgTable, varchar, serial, doublePrecision, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, varchar, serial, doublePrecision, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 
 export const vehicles = pgTable("vehicles", {
   id: varchar("id", { length: 256 }).primaryKey(), // Device ID/IMEI
   name: varchar("name", { length: 256 }).notNull(),
   status: varchar("status", { length: 50 }).notNull().default("active"),
+  plateNumber: varchar("plate_number", { length: 50 }),
+  vehicleType: varchar("vehicle_type", { length: 100 }),
+  rentStatus: varchar("rent_status", { length: 50 }).default("available").notNull(),
+  odometer: doublePrecision("odometer").default(0).notNull(),
+  nextOilChange: doublePrecision("next_oil_change").default(10000).notNull(),
+  taxDueDate: timestamp("tax_due_date", { mode: "date" }),
+  accStatus: boolean("acc_status").default(false).notNull(),
+  relayStatus: boolean("relay_status").default(false).notNull(),
+  batteryLevel: integer("battery_level").default(100).notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
 
@@ -14,6 +23,9 @@ export const locationLogs = pgTable("location_logs", {
   longitude: doublePrecision("longitude").notNull(),
   speed: doublePrecision("speed").notNull(),
   heading: doublePrecision("heading").notNull(),
+  accStatus: boolean("acc_status").default(false).notNull(),
+  relayStatus: boolean("relay_status").default(false).notNull(),
+  batteryLevel: integer("battery_level").default(100).notNull(),
   timestamp: timestamp("timestamp", { mode: "date" }).notNull(),
 });
 
